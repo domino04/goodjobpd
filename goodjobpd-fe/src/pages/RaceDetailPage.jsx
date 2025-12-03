@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getRace, getRanking, joinRace } from '../api/raceApi'
+import { getRace, getRanking, joinRace, closeRace, reopenRace } from '../api/raceApi'
 import { getCurrentUser } from '../utils/auth'
 
 function statusBadgeClass(status) {
@@ -11,6 +11,8 @@ function statusBadgeClass(status) {
       return 'badge running'
     case 'FINISHED':
       return 'badge finished'
+    case 'CLOSED':
+      return 'badge closed'
     default:
       return 'badge'
   }
@@ -24,6 +26,7 @@ export default function RaceDetailPage() {
   const [error, setError] = useState('')
   const [joining, setJoining] = useState(false)
   const [joined, setJoined] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false) // ⭐ close/reopen 중 여부
   const user = getCurrentUser()
 
   useEffect(() => {
@@ -47,10 +50,14 @@ export default function RaceDetailPage() {
       }
     }
     fetchData()
-    // 🔥 user 전체가 아니라, id 값만 의존하게 하거나 아예 raceId만 두는 게 안전
+    // user 전체가 아니라 id만 의존
   }, [raceId, user?.id])
 
   const handleJoin = async () => {
+    if (!user) {
+      alert('로그인이 필요합니다.')
+      return
+    }
     try {
       setJoining(true)
       await joinRace(raceId, user.id)
@@ -64,31 +71,119 @@ export default function RaceDetailPage() {
     }
   }
 
+  const handleClose = async () => {
+    if (!user) return
+    if (!window.confirm('이 경주를 닫으시겠습니까?')) return
+    try {
+      setUpdatingStatus(true)
+      const updated = await closeRace(raceId, user.id)
+      setRace(updated)
+      alert('경주를 닫았습니다.')
+    } catch (err) {
+      console.error(err)
+      alert(err?.response?.data?.message || '경주 닫기에 실패했습니다.')
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
+  const handleReopen = async () => {
+    if (!user) return
+    if (!window.confirm('이 경주를 다시 활성화하시겠습니까?')) return
+    try {
+      setUpdatingStatus(true)
+      const updated = await reopenRace(raceId, user.id)
+      setRace(updated)
+      alert('경주를 다시 열었습니다.')
+    } catch (err) {
+      console.error(err)
+      alert(err?.response?.data?.message || '경주 다시 열기에 실패했습니다.')
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
   if (loading) return <div className="card">불러오는 중...</div>
   if (error) return <div className="card" style={{ color: 'red' }}>{error}</div>
   if (!race) return <div className="card">경주가 존재하지 않습니다.</div>
 
   const isFinished = race.status === 'FINISHED'
+  const isClosed = race.status === 'CLOSED'
+
+  // ⭐ 이 경주를 만든 사람인가?
+  const isOwner =
+      user && race.createdById && user.id === race.createdById
+
+  // 버튼 활성 조건
+  const canClose =
+      isOwner && !isFinished && !isClosed && !updatingStatus
+
+  const canReopen =
+      isOwner && isClosed && !updatingStatus
 
   return (
       <div className="card">
         <h2>{race.name}</h2>
-        <div style={{ marginBottom: 8, fontSize: 14 }}>
+
+        <div style={{ marginBottom: 4, fontSize: 14 }}>
           목표 포도알: <strong>{race.targetCnt}알</strong> · 하루 최대{' '}
           <strong>{race.dailyLimit}알</strong>
         </div>
+
+        {race.createdByNickname && (
+            <div style={{ marginBottom: 4, fontSize: 13, color: '#4a5568' }}>
+              개설자: <strong>{race.createdByNickname}</strong>
+            </div>
+        )}
+
         <div style={{ marginBottom: 12, fontSize: 14 }}>
-          상태: <span className={statusBadgeClass(race.status)}>{race.status}</span>
+          상태:{' '}
+          <span className={statusBadgeClass(race.status)}>
+          {race.status}
+        </span>
         </div>
+
+        {/* ⭐ 주인장만 보는 close/reopen 버튼 */}
+        {isOwner && (
+            <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {canClose && (
+                  <button
+                      className="secondary"
+                      onClick={handleClose}
+                      disabled={!canClose}
+                  >
+                    {updatingStatus ? '처리 중...' : '경주 닫기'}
+                  </button>
+              )}
+              {canReopen && (
+                  <button
+                      className="primary"
+                      onClick={handleReopen}
+                      disabled={!canReopen}
+                  >
+                    {updatingStatus ? '처리 중...' : '경주 다시 열기'}
+                  </button>
+              )}
+            </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           {/* 참가 버튼 */}
           <button
               className="secondary"
               onClick={handleJoin}
-              disabled={joining || isFinished || joined}
+              disabled={
+                  joining ||
+                  isFinished ||
+                  isClosed || // ⭐ 닫힌 경주에는 참가 불가
+                  joined
+              }
           >
-            {joined ? '참가중' : joining ? '참가 중...' : '경주 참가'}
+            {joined
+                ? '참가중'
+                : joining
+                    ? '참가 중...'
+                    : '경주 참가'}
           </button>
 
           {/* 참가한 상태일 때만 포도 등록 / 내 포도 보기 버튼 표시 */}
@@ -96,7 +191,10 @@ export default function RaceDetailPage() {
               <>
                 {' '}
                 <Link to={`/races/${raceId}/grapes/new`}>
-                  <button className="primary" disabled={isFinished}>
+                  <button
+                      className="primary"
+                      disabled={isFinished || isClosed} // ⭐ 닫힌/종료된 경주에는 등록 불가
+                  >
                     포도알 등록
                   </button>
                 </Link>
@@ -107,9 +205,11 @@ export default function RaceDetailPage() {
               </>
           )}
 
-          {isFinished && (
+          {(isFinished || isClosed) && (
               <div style={{ marginTop: 8, fontSize: 12, color: '#e53e3e' }}>
-                이미 종료된 경주입니다. 포도알을 더 이상 등록할 수 없습니다.
+                {isFinished
+                    ? '이미 종료된 경주입니다. 포도알을 더 이상 등록할 수 없습니다.'
+                    : '닫힌 경주입니다. 포도알을 더 이상 등록할 수 없습니다.'}
               </div>
           )}
         </div>

@@ -26,6 +26,7 @@ export default function UserGrapesPage({ userId: propUserId }) {
   const [error, setError] = useState('')
   const [deletingId, setDeletingId] = useState(null)
   const [targetCnt, setTargetCnt] = useState(30)
+  const [race, setRace] = useState(null)
 
   const loadData = async () => {
     if (!viewingUserId) {
@@ -52,6 +53,7 @@ export default function UserGrapesPage({ userId: propUserId }) {
 
       setLogs(logsRes)
       setDeletedLogs(deletedRes)
+      setRace(raceRes)
       setTargetCnt(raceRes.targetCnt)
 
       if (!isOwner && userRes) {
@@ -105,6 +107,8 @@ export default function UserGrapesPage({ userId: propUserId }) {
 
   const nickname = user?.nickname
   const title = nickname ? `${nickname}님의 포도송이` : '포도송이'
+  const isFinished = race?.status === 'FINISHED'
+  const isClosed = race?.status === 'CLOSED'
 
   return (
       <div className="card">
@@ -114,8 +118,21 @@ export default function UserGrapesPage({ userId: propUserId }) {
         {isOwner && (
             <div style={{ marginBottom: 12 }}>
               <Link to={`/races/${raceId}/grapes/new`}>
-                <button className="primary">+ 포도알 등록하기</button>
+                <button
+                    className="primary"
+                    disabled={isFinished || isClosed}  // ⭐ 상태에 따라 비활성화
+                >
+                  + 포도알 등록하기
+                </button>
               </Link>
+
+              {(isFinished || isClosed) && (
+                  <div style={{ marginTop: 4, fontSize: 12, color: '#e53e3e' }}>
+                    {isFinished
+                        ? '이미 종료된 경주입니다. 포도알을 더 이상 등록할 수 없습니다.'
+                        : '닫힌 경주입니다. 포도알을 더 이상 등록할 수 없습니다.'}
+                  </div>
+              )}
             </div>
         )}
 

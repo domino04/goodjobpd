@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createRace } from '../api/raceApi'
+import {getCurrentUser} from "../utils/auth";
 
 export default function RaceCreatePage() {
   const [name, setName] = useState('')
@@ -9,6 +10,7 @@ export default function RaceCreatePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const currentUser = getCurrentUser()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -22,7 +24,8 @@ export default function RaceCreatePage() {
       const race = await createRace(
         name.trim(),
         Number(targetCnt) || 30,
-        Number(dailyLimit) || 2
+        Number(dailyLimit) || 2,
+          currentUser.id
       )
       navigate(`/races/${race.id}`)
     } catch (err) {

@@ -22,7 +22,8 @@ public class RaceController {
         Race race = raceService.createRace(
                 request.getName(),
                 request.getTargetCnt(),
-                request.getDailyLimit()
+                request.getDailyLimit(),
+                request.getUserId()
         );
         return RaceResponse.from(race);
     }
@@ -60,11 +61,29 @@ public class RaceController {
                 .toList();
     }
 
+    @PostMapping("/{raceId}/close")
+    public RaceResponse close(@PathVariable Long raceId, @RequestBody OwnerRequest request) {
+        Race race = raceService.closeRace(raceId, request.getUserId());
+        return RaceResponse.from(race);
+    }
+
+    @PostMapping("/{raceId}/reopen")
+    public RaceResponse reopen(@PathVariable Long raceId, @RequestBody OwnerRequest request) {
+        Race race = raceService.reopenRace(raceId, request.getUserId());
+        return RaceResponse.from(race);
+    }
+
+    @Data
+    public static class OwnerRequest {
+        private Long userId;
+    }
+
     @Data
     public static class RaceCreateRequest {
         private String name;
         private Integer targetCnt;
         private Integer dailyLimit;
+        private Long userId;
     }
 
     @Data
@@ -74,6 +93,8 @@ public class RaceController {
         private String status;
         private Integer targetCnt;
         private Integer dailyLimit;
+        private Long createdById;
+        private String createdByNickname;
 
         public static RaceResponse from(Race race) {
             RaceResponse res = new RaceResponse();
@@ -82,6 +103,11 @@ public class RaceController {
             res.setStatus(race.getStatus().name());
             res.setTargetCnt(race.getTargetCnt());
             res.setDailyLimit(race.getDailyLimit());
+            if (race.getCreatedBy() != null) {
+                res.setCreatedById(race.getCreatedBy().getId());
+                res.setCreatedByNickname(race.getCreatedBy().getNickname());
+            }
+
             return res;
         }
     }

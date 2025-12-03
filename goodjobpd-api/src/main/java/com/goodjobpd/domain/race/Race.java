@@ -1,5 +1,6 @@
 package com.goodjobpd.domain.race;
 
+import com.goodjobpd.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -37,6 +38,10 @@ public class Race {
     private LocalDateTime createdAt;
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
 
     @PrePersist
     public void onCreate() {
